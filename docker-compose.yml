@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  airsim-service:
+    image: airsim-service:1.0
+    container_name: airsim-service
+
+    build:
+      context: .
+
+    restart: unless-stopped
+
+    ports:
+      - "8888:8888"
+
+    environment:
+      PYTHONPATH: /app/sdk
+      AIRSIM_IP: host.docker.internal
+      AIRSIM_PORT: "41451"
+      CORS_ORIGINS: "*"

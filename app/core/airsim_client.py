@@ -55,9 +55,20 @@ def get_client():
 
 
 def reset_client():
-
     """Drop the cached client so the next call reconnects (e.g. after AirSim restart)."""
-
     global _client
-
     _client = None
+
+
+def create_client():
+    """Create a brand-new, independent AirSim connection.
+
+    视频流等需要持续独占 RPC 连接的场景应使用独立 client，
+    避免与飞行指令共用同一连接造成并发冲突。
+    """
+    client = airsim.MultirotorClient(
+        ip=settings.AIRSIM_IP,
+        port=settings.AIRSIM_PORT,
+    )
+    client.confirmConnection()
+    return client

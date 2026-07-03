@@ -13,11 +13,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# 视频流参数（延迟/带宽平衡，卡顿可下调）
-STREAM_WIDTH = 640
-STREAM_HEIGHT = 360
+# 视频流参数（清晰度/延迟/带宽平衡，卡顿可下调分辨率或质量）
+# 注意：清晰度上限取决于 AirSim settings.json 里相机的采集分辨率，
+# 若源分辨率低于此处，放大只会更模糊，需先调高 settings.json 的 CaptureSettings。
+STREAM_WIDTH = 1280
+STREAM_HEIGHT = 720
 STREAM_FPS = 20
-STREAM_JPEG_QUALITY = 60
+STREAM_JPEG_QUALITY = 80
 
 
 def _capture_jpeg(client, camera: str) -> bytes | None:
@@ -31,8 +33,9 @@ def _capture_jpeg(client, camera: str) -> bytes | None:
     img = img.reshape(resp.height, resp.width, 3)  # BGR
     img = img[:, :, ::-1]  # BGR -> RGB
     pil = Image.fromarray(img)
-    if (resp.width, resp.height) != (STREAM_WIDTH, STREAM_HEIGHT):
-        pil = pil.resize((STREAM_WIDTH, STREAM_HEIGHT))
+    # 仅在源分辨率大于目标时下采样（用高质量 LANCZOS）；源比目标小则保持原样，避免放大变糊
+    if resp.width > STREAM_WIDTH or resp.height > STREAM_HEIGHT:
+        pil = pil.resize((STREAM_WIDTH, STREAM_HEIGHT), Image.LANCZOS)
     buf = io.BytesIO()
     pil.save(buf, format="JPEG", quality=STREAM_JPEG_QUALITY)
     return buf.getvalue()

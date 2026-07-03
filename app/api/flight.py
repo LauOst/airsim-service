@@ -19,7 +19,7 @@ class Waypoint(BaseModel):
 
 class FlightPlan(BaseModel):
     waypoints: List[Waypoint]
-    altitude: float = 20.0
+    altitude: float = 80.0
     speed: float = 5.0
 
 def latlng_to_ned(waypoints: List[Waypoint], altitude: float) -> List["airsim.Vector3r"]:
@@ -78,6 +78,75 @@ async def land():
     except Exception as e:
         reset_client()
         logger.exception("降落失败")
+        return {"status": "error", "message": str(e)}
+
+
+class MoveCommand(BaseModel):
+    vx: float = 0.0        # 机体系前后速度 (m/s)，正=前
+    vy: float = 0.0        # 机体系左右速度 (m/s)，正=右
+    vz: float = 0.0        # 上下速度 (m/s)，正=下降
+    yaw_rate: float = 0.0  # 偏航角速度 (度/s)，正=顺时针
+    duration: float = 0.5  # 指令持续时间 (s)
+
+
+def _run_takeoff():
+    client = get_client()
+    client.enableApiControl(True)
+    client.armDisarm(True)
+    client.takeoffAsync().join()
+
+
+@router.post("/takeoff")
+async def takeoff():
+    """起飞（手动模式入口，含解锁）。"""
+    try:
+        await run_in_threadpool(_run_takeoff)
+        return {"status": "success", "message": "已起飞"}
+    except Exception as e:
+        reset_client()
+        logger.exception("起飞失败")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/move")
+def move(cmd: MoveCommand):
+    """机体系速度控制，非阻塞立即返回。前端长按时按固定间隔重复发送。"""
+    try:
+        client = get_client()
+        client.moveByVelocityBodyFrameAsync(
+            cmd.vx, cmd.vy, cmd.vz, cmd.duration,
+            yaw_mode=airsim.YawMode(is_rate=True, yaw_or_rate=cmd.yaw_rate),
+        )
+        return {"status": "success", "message": "ok"}
+    except Exception as e:
+        reset_client()
+        logger.exception("手动控制失败")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/hover")
+def hover():
+    """悬停（松开按钮时调用，立即停住）。"""
+    try:
+        get_client().hoverAsync()
+        return {"status": "success", "message": "悬停"}
+    except Exception as e:
+        reset_client()
+        logger.exception("悬停失败")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/stop")
+def stop():
+    """急停：清零速度并悬停。"""
+    try:
+        client = get_client()
+        client.moveByVelocityBodyFrameAsync(0, 0, 0, 1)
+        client.hoverAsync()
+        return {"status": "success", "message": "已急停"}
+    except Exception as e:
+        reset_client()
+        logger.exception("急停失败")
         return {"status": "error", "message": str(e)}
 
 
